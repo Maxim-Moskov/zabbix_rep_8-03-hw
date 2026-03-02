@@ -98,4 +98,4 @@ sudo systemctl enable zabbix-agent
 Получение метрик успешно проверено в разделе Latest data.
 
 **Скриншот раздела Latest Data (Свободное место на диске C:):**
-![Свободное место на диске C](windows_c_drive.png)
+![Свободное место на диске C](img/windows_c_drive.png)
