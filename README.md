@@ -1,68 +1,37 @@
-# Домашнее задание по занятию "GitLab" — Моськов Максим
+# Домашнее задания "Система мониторинга Zabbix" — Моськов Максим
 
-## Задание 1: Развертывание GitLab и регистрация Runner
-
-### Описание решения:
-1. **Развертывание**: С помощью Vagrant и VirtualBox была развернута виртуальная машина на базе Debian 12 (использован бокс `debian/bookworm64`).
-2. **Установка**: Внутри ВМ был установлен GitLab EE. Доступ к интерфейсу осуществляется по адресу `http://gitlab.localdomain` (IP 192.168.56.10).
-3. **Проект**: Создан новый пустой проект `my-project-test`.
-4. **Раннер**: Зарегистрирован `gitlab-runner` с использованием Docker-исполнителя (executor). 
-
-### Настройки Runner в проекте:
-На скриншоте ниже видно, что раннер успешно зарегистрирован, имеет тег `docker` и активен (зеленый статус).
-
-![Скриншот настроек раннера](img/runner_active.png)
-
-### Конфигурация Runner (config.toml):
-Для обеспечения работы режима Docker-in-Docker в файл конфигурации были внесены следующие правки:
-* Установлен параметр `privileged = true`.
-* Настроен проброс сокета: `volumes = ["/cache", "/var/run/docker.sock:/var/run/docker.sock"]`.
-* Добавлен `extra_hosts` для связи с локальным доменом GitLab.
-
-![Скриншот config.toml](img/runner_config.png)
-
-![Скриншот config.toml](img/runner_config_2.png)
-
----
-
-## Задание 2: Настройка CI/CD Pipeline
+## Задание 1: Установите Zabbix Server с веб-интерфейсом.
 
 ### Описание решения:
-Создан файл `.gitlab-ci.yml` для автоматизации тестирования и сборки.
-Для решения проблем с сетевыми ограничениями и версиями API были применены следующие настройки:
-* Использование локальных образов через политику `pull_policy: [if-not-present]`.
-* Принудительное указание версии API: `DOCKER_API_VERSION: "1.41"`.
-* В `config.toml` раннера разрешены локальные политики (`allowed_pull_policies`).
 
-![Скриншот config.toml](img/pipeline_success.png)
+# Обновление системы и установка базы данных
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y postgresql postgresql-contrib
 
-### Итоговый файл .gitlab-ci.yml:
-```yaml
-stages:
-  - test
-  - build
+# Добавление официального репозитория Zabbix 7.0 LTS
+wget https://repo.zabbix.com/zabbix/7.0/debian/pool/main/z/zabbix-release/zabbix-release_7.0-2+debian12_all.deb
+sudo dpkg -i zabbix-release_7.0-2+debian12_all.deb
+sudo apt update
 
-variables:
-  DOCKER_API_VERSION: "1.41"
+# Установка сервера, веб-интерфейса (Apache) и агента
+sudo apt install -y zabbix-server-pgsql zabbix-frontend-php php8.2-pgsql zabbix-apache-conf zabbix-sql-scripts zabbix-agent
 
-test_job:
-  stage: test
-  image: 
-    name: golang:1.17
-    pull_policy: [if-not-present]
-  script:
-    - echo "Running tests..."
-    - go version
+# Создание пользователя БД (система запросит задать пароль)
+sudo -u postgres createuser --pwprompt zabbix
 
-build_job:
-  stage: build
-  image: 
-    name: docker:latest
-    pull_policy: [if-not-present]
-  script:
-    - echo "Checking Docker..."
-    - docker info
-    - echo "Building dummy image..."
-    - echo "FROM alpine:latest" > Dockerfile
-    - docker build -t my-test-image:local .
+# Создание базы данных zabbix
+sudo -u postgres createdb -O zabbix zabbix
 
+# Переход во временную папку (чтобы избежать ошибок прав доступа) и импорт начальной структуры БД
+cd /tmp
+zcat /usr/share/zabbix-sql-scripts/postgresql/server.sql.gz | sudo -u zabbix psql zabbix
+
+# Редактирование файла конфигурации для указания пароля от БД
+sudo nano /etc/zabbix/zabbix_server.conf
+# В файле нужно раскомментировать строку DBPassword= и указать свой пароль
+
+# Перезапуск и добавление служб в автозагрузку
+sudo systemctl restart zabbix-server zabbix-agent apache2
+sudo systemctl enable zabbix-server zabbix-agent apache2
+
+![Скриншот авторизации Zabbix](img/zabbix-login.png)
